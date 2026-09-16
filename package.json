@@ -1,0 +1,21 @@
+{
+  "name": "music-analytics-dashboard",
+  "version": "1.0.0",
+  "description": "Very Powerful Music Analytics Dashboard (React + Node.js)",
+  "scripts": {
+    "server": "cd server && npm start",
+    "client": "cd client && npm run dev",
+    "install:all": "cd server && npm install && cd ../client && npm install"
+  },
+  "keywords": [
+    "music",
+    "analytics",
+    "dashboard",
+    "react",
+    "node",
+    "telemetry",
+    "streaming"
+  ],
+  "author": "",
+  "license": "MIT"
+}
