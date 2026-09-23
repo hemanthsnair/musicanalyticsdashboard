@@ -7,13 +7,14 @@ import {
   Globe,
   Headphones,
   Clock,
-  Repeat,
   ShieldCheck,
   Zap,
   Search,
   CheckCircle,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Disc3,
+  DollarSign
 } from 'lucide-react';
 
 import MetricCard from './components/MetricCard';
@@ -25,11 +26,18 @@ import LiveActivityFeed from './components/LiveActivityFeed';
 import DemographicsPanel from './components/DemographicsPanel';
 import AudioPlayerBar from './components/AudioPlayerBar';
 import EventSimulatorModal from './components/EventSimulatorModal';
+import TrackDetailModal from './components/TrackDetailModal';
+import ArtistDetailModal from './components/ArtistDetailModal';
+import AlbumDetailModal from './components/AlbumDetailModal';
+import AlbumsGrid from './components/AlbumsGrid';
+import PlatformBreakdownView from './components/PlatformBreakdownView';
 import { audioSynth } from './utils/audioSynth';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const [timeframe, setTimeframe] = useState('7d');
+  const [selectedPlatform, setSelectedPlatform] = useState('all');
+  const [sortBy, setSortBy] = useState('plays'); // 'plays' | 'revenue' | 'completion'
 
   // Data States
   const [overview, setOverview] = useState(null);
@@ -47,9 +55,13 @@ export default function App() {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('all');
+  const [songTimeframe, setSongTimeframe] = useState('all-time');
 
-  // Simulator & Notifications
+  // Modals State
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+  const [selectedTrackId, setSelectedTrackId] = useState(null);
+  const [selectedArtistId, setSelectedArtistId] = useState(null);
+  const [selectedAlbumId, setSelectedAlbumId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
   // Show Toast Helper
@@ -58,10 +70,10 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Fetch initial overview and static components
-  const fetchOverview = async () => {
+  // Fetch initial overview
+  const fetchOverview = async (platform = selectedPlatform) => {
     try {
-      const res = await fetch('/api/stats/overview');
+      const res = await fetch(`/api/stats/overview?platform=${platform}`);
       const data = await res.json();
       if (data.success) setOverview(data.data);
     } catch (err) {
@@ -69,9 +81,9 @@ export default function App() {
     }
   };
 
-  const fetchTrend = async (tf = timeframe) => {
+  const fetchTrend = async (tf = timeframe, platform = selectedPlatform) => {
     try {
-      const res = await fetch(`/api/stats/plays-trend?timeframe=${tf}`);
+      const res = await fetch(`/api/stats/plays-trend?timeframe=${tf}&platform=${platform}`);
       const data = await res.json();
       if (data.success) setTrendData(data.data);
     } catch (err) {
@@ -79,14 +91,20 @@ export default function App() {
     }
   };
 
-  const fetchSongs = async () => {
+  const fetchSongs = async (
+    sb = sortBy,
+    platform = selectedPlatform,
+    search = searchQuery,
+    tf = songTimeframe
+  ) => {
     try {
-      const res = await fetch('/api/songs/top?limit=20');
+      const url = `/api/songs/top?limit=25&sortBy=${sb}&platform=${platform}&search=${encodeURIComponent(search || '')}&timeframe=${tf}`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
         setSongs(data.data);
         if (!currentSong && data.data.length > 0) {
-          setCurrentSong(data.data[0]); // default docked song
+          setCurrentSong(data.data[0]);
         }
       }
     } catch (err) {
@@ -94,9 +112,9 @@ export default function App() {
     }
   };
 
-  const fetchArtists = async () => {
+  const fetchArtists = async (platform = selectedPlatform) => {
     try {
-      const res = await fetch('/api/artists/top?limit=12');
+      const res = await fetch(`/api/artists/top?limit=12&platform=${platform}`);
       const data = await res.json();
       if (data.success) setArtists(data.data);
     } catch (err) {
@@ -137,18 +155,50 @@ export default function App() {
   // Initial Load
   useEffect(() => {
     fetchOverview();
-    fetchTrend('7d');
-    fetchSongs();
-    fetchArtists();
+    fetchTrend('7d', selectedPlatform);
+    fetchSongs(sortBy, selectedPlatform, '', 'all-time');
+    fetchArtists(selectedPlatform);
     fetchGenres();
     fetchDemographics();
     fetchActivities();
   }, []);
 
-  // Timeframe change handler
+  // Debounced search query trigger
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchSongs(sortBy, selectedPlatform, searchQuery, songTimeframe);
+    }, 280);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // When platform changes, re-fetch all relevant data
+  const handlePlatformChange = (newPlatform) => {
+    setSelectedPlatform(newPlatform);
+    fetchOverview(newPlatform);
+    fetchTrend(timeframe, newPlatform);
+    fetchSongs(sortBy, newPlatform, searchQuery, songTimeframe);
+    fetchArtists(newPlatform);
+    triggerToast(
+      newPlatform === 'all'
+        ? 'Showing verified aggregated data across all DSP platforms'
+        : `Filtered live streaming chart to ${newPlatform.replace('_', ' ').toUpperCase()}`
+    );
+  };
+
+  const handleSortByChange = (newSortBy) => {
+    setSortBy(newSortBy);
+    fetchSongs(newSortBy, selectedPlatform, searchQuery, songTimeframe);
+  };
+
+  const handleSongTimeframeChange = (newTf) => {
+    setSongTimeframe(newTf);
+    fetchSongs(sortBy, selectedPlatform, searchQuery, newTf);
+    triggerToast(`Time period updated to ${newTf.toUpperCase()} rankings`);
+  };
+
   const handleTimeframeChange = (newTf) => {
     setTimeframe(newTf);
-    fetchTrend(newTf);
+    fetchTrend(newTf, selectedPlatform);
   };
 
   // Server-Sent Events (SSE) Live Feed Subscription
@@ -166,13 +216,34 @@ export default function App() {
 
             // Update stats dynamically
             if (payload.type === 'play' || payload.type === 'skip') {
-              setOverview(prev => prev ? { ...prev, totalPlays: prev.totalPlays + 1 } : prev);
+              setOverview(prev => {
+                if (!prev) return prev;
+                const payout = payload.payout || 0.0038;
+                return {
+                  ...prev,
+                  totalPlays: prev.totalPlays + 1,
+                  totalRevenue: Number(((prev.totalRevenue || 0) + payout).toFixed(2))
+                };
+              });
+
               setSongs(prevSongs =>
-                prevSongs.map(s => (s.id === payload.songId ? { ...s, plays: s.plays + 1 } : s))
+                prevSongs.map(s => {
+                  if (s.id === payload.songId) {
+                    const payout = payload.payout || 0.0038;
+                    return {
+                      ...s,
+                      plays: s.plays + 1,
+                      totalRevenue: Number(((s.totalRevenue || 0) + payout).toFixed(2)),
+                      displayPlays: (s.displayPlays || s.plays) + 1,
+                      displayRevenue: Number(((s.displayRevenue || s.totalRevenue || 0) + payout).toFixed(2))
+                    };
+                  }
+                  return s;
+                })
               );
             }
           }
-        } catch (e) {
+        } catch {
           // heartbeat or unparseable
         }
       };
@@ -197,7 +268,11 @@ export default function App() {
     } else {
       setCurrentSong(song);
       setIsPlaying(true);
-      audioSynth.playSong(song);
+      audioSynth.playSong(
+        song,
+        null,
+        () => setIsPlaying(false)
+      );
     }
   };
 
@@ -211,26 +286,26 @@ export default function App() {
       setIsPlaying(false);
     } else if (currentSong) {
       setIsPlaying(true);
-      audioSynth.playSong(currentSong);
+      audioSynth.playSong(
+        currentSong,
+        null,
+        () => setIsPlaying(false)
+      );
     }
   };
 
   // Callback when user injects event via Simulator
   const handleEventSent = (event) => {
-    triggerToast(`⚡ Telemetry recorded: ${event ? event.type.toUpperCase() : 'Surge batch'} logged!`);
+    triggerToast(`⚡ Telemetry recorded: ${event ? `${event.type.toUpperCase()} on ${event.platform || 'Spotify'}` : 'Surge batch'} logged!`);
     fetchOverview();
     fetchSongs();
     fetchActivities();
   };
 
-  // Filter songs for search & genre
+  // Filter songs for genre (backend handles search & timeframe)
   const filteredSongs = songs.filter(s => {
-    const matchesGenre = selectedGenre === 'all' || s.genre.toLowerCase() === selectedGenre.toLowerCase();
-    const matchesSearch = !searchQuery ||
-      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.genre.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesGenre && matchesSearch;
+    if (selectedGenre === 'all') return true;
+    return s.genre.toLowerCase().includes(selectedGenre.toLowerCase());
   });
 
   return (
@@ -266,8 +341,17 @@ export default function App() {
           <li className={`nav-item ${activeTab === 'songs' ? 'active' : ''}`}>
             <button onClick={() => setActiveTab('songs')}>
               <Flame size={18} />
-              <span>Top Songs</span>
+              <span>Top Tracks</span>
               <span className="nav-badge">{songs.length}</span>
+            </button>
+          </li>
+          <li className={`nav-item ${activeTab === 'platforms' ? 'active' : ''}`}>
+            <button onClick={() => setActiveTab('platforms')}>
+              <Radio size={18} />
+              <span>Streaming Apps</span>
+              <span className="nav-badge" style={{ background: 'rgba(6, 182, 212, 0.15)', color: 'var(--accent-cyan)' }}>
+                DSPs
+              </span>
             </button>
           </li>
           <li className={`nav-item ${activeTab === 'artists' ? 'active' : ''}`}>
@@ -275,6 +359,12 @@ export default function App() {
               <Users size={18} />
               <span>Top Artists</span>
               <span className="nav-badge">{artists.length}</span>
+            </button>
+          </li>
+          <li className={`nav-item ${activeTab === 'albums' ? 'active' : ''}`}>
+            <button onClick={() => setActiveTab('albums')}>
+              <Disc3 size={18} />
+              <span>Albums</span>
             </button>
           </li>
           <li className={`nav-item ${activeTab === 'demographics' ? 'active' : ''}`}>
@@ -313,19 +403,43 @@ export default function App() {
 
       {/* Main Wrapper */}
       <div className="main-wrapper">
-        {/* Top Header */}
+        {/* Top Header with Global Platform Selector */}
         <header className="top-header">
-          <div className="header-search">
-            <Search size={16} />
-            <input
-              type="text"
-              placeholder="Search songs, artists, genres..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+          {/* Global Platform Selector Bar */}
+          <div className="platform-filter-bar">
+            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
+              Platform Lens:
+            </span>
+            {[
+              { id: 'all', label: 'All DSPs', color: 'var(--accent-green)' },
+              { id: 'spotify', label: 'Spotify', color: '#1db954' },
+              { id: 'apple_music', label: 'Apple Music', color: '#fa243c' },
+              { id: 'tidal', label: 'Tidal', color: '#00ffff' },
+              { id: 'youtube_music', label: 'YouTube Music', color: '#ff0000' },
+              { id: 'amazon_music', label: 'Amazon Music', color: '#ff9900' }
+            ].map((p) => (
+              <button
+                key={p.id}
+                className={`platform-pill ${selectedPlatform === p.id ? 'active' : ''}`}
+                onClick={() => handlePlatformChange(p.id)}
+              >
+                <span className="pill-dot" style={{ background: p.color }} />
+                <span>{p.label}</span>
+              </button>
+            ))}
           </div>
 
           <div className="header-actions">
+            <div className="header-search">
+              <Search size={15} />
+              <input
+                type="text"
+                placeholder="Search tracks, artists, albums..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+
             <button
               className="btn-secondary"
               onClick={() => setIsSimulatorOpen(true)}
@@ -341,21 +455,29 @@ export default function App() {
               title="Quick Refresh Analytics"
             >
               <Sparkles size={15} />
-              <span>Refresh Metrics</span>
+              <span>Refresh</span>
             </button>
           </div>
         </header>
 
         {/* Dashboard Body */}
         <main className="dashboard-content">
-          {/* Executive KPI Grid */}
+          {/* Executive KPI Grid with Gross Royalties */}
           <div className="kpi-grid">
             <MetricCard
               title="Total Stream Plays"
               value={overview?.totalPlays ? overview.totalPlays.toLocaleString() : '10,544,300'}
               change={overview?.totalPlaysChange ?? 14.8}
-              subtext="vs previous 30 days"
+              subtext={selectedPlatform !== 'all' ? `Plays on ${selectedPlatform.replace('_', ' ').toUpperCase()}` : "vs previous 30 days"}
               icon={Headphones}
+              color="emerald"
+            />
+            <MetricCard
+              title="Gross Royalty Revenue"
+              value={overview?.totalRevenue ? `$${overview.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '$48,290'}
+              change={overview?.totalRevenueChange ?? 16.4}
+              subtext={overview?.avgRevenuePerThousand ? `$${overview.avgRevenuePerThousand} / 1k streams` : "Gross catalog royalties"}
+              icon={DollarSign}
               color="emerald"
             />
             <MetricCard
@@ -384,7 +506,7 @@ export default function App() {
             />
           </div>
 
-          {/* Tab Views */}
+          {/* TAB: Overview */}
           {activeTab === 'overview' && (
             <>
               {/* Analytics Main Chart Row */}
@@ -408,10 +530,19 @@ export default function App() {
                   onGenreChange={setSelectedGenre}
                   searchQuery={searchQuery}
                   onSearchChange={setSearchQuery}
+                  sortBy={sortBy}
+                  onSortByChange={handleSortByChange}
+                  onOpenTrack={setSelectedTrackId}
+                  onOpenArtist={setSelectedArtistId}
+                  onOpenAlbum={setSelectedAlbumId}
+                  selectedPlatform={selectedPlatform}
+                  timeframe={songTimeframe}
+                  onTimeframeChange={handleSongTimeframeChange}
                 />
                 <LiveActivityFeed
                   activities={activities.slice(0, 10)}
                   onSimulateClick={() => setIsSimulatorOpen(true)}
+                  onOpenTrack={setSelectedTrackId}
                 />
               </div>
 
@@ -420,6 +551,7 @@ export default function App() {
             </>
           )}
 
+          {/* TAB: Top Songs (with Most Streamed & Highest Revenue) */}
           {activeTab === 'songs' && (
             <TopSongsTable
               songs={filteredSongs}
@@ -430,30 +562,61 @@ export default function App() {
               onGenreChange={setSelectedGenre}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              sortBy={sortBy}
+              onSortByChange={handleSortByChange}
+              onOpenTrack={setSelectedTrackId}
+              onOpenArtist={setSelectedArtistId}
+              onOpenAlbum={setSelectedAlbumId}
+              selectedPlatform={selectedPlatform}
+              timeframe={songTimeframe}
+              onTimeframeChange={handleSongTimeframeChange}
             />
           )}
 
-          {activeTab === 'artists' && (
-            <TopArtistsGrid artists={artists} />
+          {/* TAB: Streaming Applications (Platform Breakdown) */}
+          {activeTab === 'platforms' && (
+            <PlatformBreakdownView
+              selectedPlatform={selectedPlatform}
+              onSelectPlatform={handlePlatformChange}
+            />
           )}
 
+          {/* TAB: Top Artists */}
+          {activeTab === 'artists' && (
+            <TopArtistsGrid
+              artists={artists}
+              onOpenArtist={setSelectedArtistId}
+              onOpenTrack={setSelectedTrackId}
+            />
+          )}
+
+          {/* TAB: Albums */}
+          {activeTab === 'albums' && (
+            <AlbumsGrid
+              onSelectAlbum={setSelectedAlbumId}
+            />
+          )}
+
+          {/* TAB: Demographics */}
           {activeTab === 'demographics' && (
             <DemographicsPanel demographics={demographics} />
           )}
 
+          {/* TAB: Live Telemetry */}
           {activeTab === 'live' && (
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '20px' }}>
               <LiveActivityFeed
                 activities={activities}
                 onSimulateClick={() => setIsSimulatorOpen(true)}
+                onOpenTrack={setSelectedTrackId}
               />
               <div className="glass-panel" style={{ padding: '24px' }}>
                 <h2 className="card-title" style={{ marginBottom: '16px' }}>
                   <Zap size={18} style={{ color: 'var(--accent-green)' }} />
-                  Real-Time Ingestion Architecture
+                  Live Ingestion & Royalty Architecture
                 </h2>
                 <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  Streaming telemetry is ingested via the high-throughput <code>POST /api/events/track</code> REST endpoint and broadcast to connected dashboards through persistent <strong>Server-Sent Events (SSE)</strong>.
+                  Streaming telemetry is ingested via <code>POST /api/events/track</code> with streaming application tags. Real-time payouts are calculated per DSP schedule and broadcast via <strong>Server-Sent Events (SSE)</strong>.
                 </p>
 
                 <div style={{ marginTop: '20px', padding: '16px', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '10px', border: '1px solid var(--border-subtle)' }}>
@@ -465,7 +628,7 @@ export default function App() {
                     <span>SSE Stream: <strong>CONNECTED</strong></span>
                   </div>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '8px' }}>
-                    Heartbeat: Every 20s • Latency: &lt;15ms
+                    Heartbeat: Every 20s • DSP Payout Sync: Real-Time
                   </div>
                 </div>
 
@@ -491,12 +654,45 @@ export default function App() {
         onTogglePlay={handleTogglePlay}
       />
 
-      {/* Telemetry Event Simulator Modal */}
+      {/* Modals */}
       <EventSimulatorModal
         songs={songs}
         isOpen={isSimulatorOpen}
         onClose={() => setIsSimulatorOpen(false)}
         onEventSent={handleEventSent}
+      />
+
+      <TrackDetailModal
+        songId={selectedTrackId}
+        isOpen={Boolean(selectedTrackId)}
+        onClose={() => setSelectedTrackId(null)}
+        currentPlayingSong={currentSong}
+        isPlaying={isPlaying}
+        onPlaySong={handlePlaySong}
+        onOpenArtist={(artId) => setSelectedArtistId(artId)}
+        onOpenAlbum={(albId) => setSelectedAlbumId(albId)}
+      />
+
+      <ArtistDetailModal
+        artistId={selectedArtistId}
+        isOpen={Boolean(selectedArtistId)}
+        onClose={() => setSelectedArtistId(null)}
+        currentPlayingSong={currentSong}
+        isPlaying={isPlaying}
+        onPlaySong={handlePlaySong}
+        onOpenTrack={(tId) => setSelectedTrackId(tId)}
+        onOpenAlbum={(aId) => setSelectedAlbumId(aId)}
+      />
+
+      <AlbumDetailModal
+        albumId={selectedAlbumId}
+        isOpen={Boolean(selectedAlbumId)}
+        onClose={() => setSelectedAlbumId(null)}
+        currentPlayingSong={currentSong}
+        isPlaying={isPlaying}
+        onPlaySong={handlePlaySong}
+        onOpenTrack={(tId) => setSelectedTrackId(tId)}
+        onOpenArtist={(artId) => setSelectedArtistId(artId)}
       />
     </div>
   );

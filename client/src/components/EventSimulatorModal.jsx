@@ -3,6 +3,7 @@ import { X, Zap, Activity } from 'lucide-react';
 
 export default function EventSimulatorModal({ songs = [], isOpen, onClose, onEventSent }) {
   const [songId, setSongId] = useState(songs[0]?.id || 'song-1');
+  const [platformId, setPlatformId] = useState('spotify');
   const [type, setType] = useState('play');
   const [device, setDevice] = useState('Mobile (iOS)');
   const [country, setCountry] = useState('United States');
@@ -29,6 +30,7 @@ export default function EventSimulatorModal({ songs = [], isOpen, onClose, onEve
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           songId,
+          platformId,
           type,
           device,
           country,
@@ -54,14 +56,18 @@ export default function EventSimulatorModal({ songs = [], isOpen, onClose, onEve
     try {
       const countries = ['United States', 'Japan', 'Germany', 'United Kingdom', 'Brazil'];
       const devices = ['Mobile (iOS)', 'Mobile (Android)', 'Desktop App'];
+      const platforms = ['spotify', 'apple_music', 'tidal', 'youtube_music', 'amazon_music'];
 
       for (let i = 0; i < 8; i++) {
         const randSong = songs[Math.floor(Math.random() * songs.length)] || { id: songId };
+        const randPlat = platforms[Math.floor(Math.random() * platforms.length)];
+
         await fetch('/api/events/track', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             songId: randSong.id,
+            platformId: randPlat,
             type: 'play',
             device: devices[Math.floor(Math.random() * devices.length)],
             country: countries[Math.floor(Math.random() * countries.length)],
@@ -93,7 +99,7 @@ export default function EventSimulatorModal({ songs = [], isOpen, onClose, onEve
         </div>
 
         <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-          Inject mock playback, skip, or like events directly into the analytics aggregation engine to test telemetry velocity in real time.
+          Inject mock playback, skip, or like events tagged with specific DSP streaming platforms directly into the analytics aggregation engine.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -114,21 +120,39 @@ export default function EventSimulatorModal({ songs = [], isOpen, onClose, onEve
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div className="form-group">
+              <label className="form-label">Streaming Application (DSP)</label>
+              <select
+                value={platformId}
+                onChange={(e) => setPlatformId(e.target.value)}
+                className="form-select"
+              >
+                <option value="spotify">Spotify ($0.0038/play)</option>
+                <option value="apple_music">Apple Music ($0.0080/play)</option>
+                <option value="tidal">Tidal ($0.0125/play)</option>
+                <option value="youtube_music">YouTube Music ($0.0022/play)</option>
+                <option value="amazon_music">Amazon Music ($0.0042/play)</option>
+                <option value="deezer">Deezer ($0.0055/play)</option>
+              </select>
+            </div>
+
+            <div className="form-group">
               <label className="form-label">Telemetry Action</label>
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
                 className="form-select"
               >
-                <option value="play">Play Stream (Full)</option>
+                <option value="play">Play Stream (Full Play)</option>
                 <option value="skip">Track Skip (Premature)</option>
                 <option value="like">Track Favorite / Like</option>
                 <option value="playlist_add">Playlist Add</option>
               </select>
             </div>
+          </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div className="form-group">
-              <label className="form-label">Client Platform</label>
+              <label className="form-label">Client Device</label>
               <select
                 value={device}
                 onChange={(e) => setDevice(e.target.value)}
@@ -140,9 +164,7 @@ export default function EventSimulatorModal({ songs = [], isOpen, onClose, onEve
                 <option value="Web Player">Web Player</option>
               </select>
             </div>
-          </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div className="form-group">
               <label className="form-label">Listener Region</label>
               <select
@@ -158,17 +180,17 @@ export default function EventSimulatorModal({ songs = [], isOpen, onClose, onEve
                 <option value="Canada">Canada</option>
               </select>
             </div>
+          </div>
 
-            <div className="form-group">
-              <label className="form-label">Listener Identifier</label>
-              <input
-                type="text"
-                value={user}
-                onChange={(e) => setUser(e.target.value)}
-                className="form-input"
-                placeholder="e.g. user_842"
-              />
-            </div>
+          <div className="form-group">
+            <label className="form-label">Listener Identifier</label>
+            <input
+              type="text"
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+              className="form-input"
+              placeholder="e.g. user_842"
+            />
           </div>
 
           <div className="modal-btn-row">

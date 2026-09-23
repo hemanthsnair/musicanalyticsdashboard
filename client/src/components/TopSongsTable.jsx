@@ -1,5 +1,13 @@
 import React from 'react';
-import { Play, Pause, Music, Flame, Sparkles } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  Music,
+  Flame,
+  DollarSign,
+  Sparkles,
+  ChevronRight
+} from 'lucide-react';
 
 export default function TopSongsTable({
   songs = [],
@@ -9,9 +17,17 @@ export default function TopSongsTable({
   selectedGenre = 'all',
   onGenreChange,
   searchQuery = '',
-  onSearchChange
+  onSearchChange,
+  sortBy = 'plays',
+  onSortByChange,
+  onOpenTrack,
+  onOpenArtist,
+  onOpenAlbum,
+  selectedPlatform = 'all',
+  timeframe = 'all-time',
+  onTimeframeChange
 }) {
-  const genres = ['all', 'Synthwave', 'Indie Pop', 'Cyberpunk', 'Lo-Fi Beats', 'EDM', 'R&B / Soul'];
+  const genres = ['all', 'Pop', 'R&B', 'Hip-Hop', 'Alternative Pop', 'Nu-Disco', 'Synth-Pop', 'Rock', 'Country'];
 
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -19,19 +35,104 @@ export default function TopSongsTable({
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  const timeframeLabels = {
+    'all-time': 'All-Time Record',
+    '12m': 'Past 12 Months',
+    '30d': 'Past 30 Days',
+    '7d': 'Past 7 Days',
+    '24h': 'Past 24 Hours'
+  };
+
   return (
     <div className="glass-panel" style={{ padding: '24px' }}>
-      <div className="card-header-bar" style={{ flexWrap: 'wrap', gap: '12px' }}>
+      <div className="card-header-bar" style={{ flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <h2 className="card-title">
-            <Flame size={19} style={{ color: 'var(--accent-rose)' }} />
-            Most Played Tracks
-          </h2>
-          <p className="card-subtitle">Global stream leaders & listener retention analytics</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 className="card-title">
+              {sortBy === 'revenue' ? (
+                <DollarSign size={20} style={{ color: 'var(--accent-green)' }} />
+              ) : (
+                <Flame size={20} style={{ color: 'var(--accent-rose)' }} />
+              )}
+              {sortBy === 'revenue' ? 'Top Gross Revenue Generating Tracks' : 'Most Streamed Tracks'}
+            </h2>
+            {selectedPlatform !== 'all' && (
+              <span className="badge-pill badge-rank" style={{ textTransform: 'uppercase' }}>
+                {selectedPlatform.replace('_', ' ')}
+              </span>
+            )}
+            <span
+              style={{
+                fontSize: '0.72rem',
+                color: 'var(--accent-cyan)',
+                background: 'rgba(6, 182, 212, 0.12)',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontWeight: 600,
+                letterSpacing: '0.03em'
+              }}
+            >
+              {timeframeLabels[timeframe] || 'All-Time'}
+            </span>
+          </div>
+          <p className="card-subtitle">
+            {sortBy === 'revenue'
+              ? 'Ranked by cumulative dollar royalties earned across digital streaming platforms'
+              : selectedPlatform !== 'all'
+                ? `Ranked by verified streaming volume and chart positions on ${selectedPlatform.replace('_', ' ').toUpperCase()}`
+                : 'Ranked by playback volume, listener velocity, and global platform retention'}
+          </p>
         </div>
 
-        {/* Filters */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Sort & Filter Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          {/* Timeframe Selector Pills */}
+          <div className="segmented-control" title="Select time period for rankings">
+            {[
+              { id: 'all-time', label: 'All-Time' },
+              { id: '12m', label: '12M' },
+              { id: '30d', label: '30D' },
+              { id: '7d', label: '7D' },
+              { id: '24h', label: '24H' }
+            ].map(tf => (
+              <button
+                key={tf.id}
+                className={`segment-btn ${timeframe === tf.id ? 'active' : ''}`}
+                onClick={() => onTimeframeChange?.(tf.id)}
+              >
+                <span>{tf.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Sort Switcher (Plays vs Revenue vs Completion) */}
+          <div className="segmented-control">
+            <button
+              className={`segment-btn ${sortBy === 'plays' ? 'active' : ''}`}
+              onClick={() => onSortByChange?.('plays')}
+              title="Sort by Total Streams"
+            >
+              <Flame size={13} />
+              <span>Most Streamed</span>
+            </button>
+            <button
+              className={`segment-btn ${sortBy === 'revenue' ? 'active' : ''}`}
+              onClick={() => onSortByChange?.('revenue')}
+              title="Sort by Gross Royalty Revenue"
+            >
+              <DollarSign size={13} style={{ color: 'var(--accent-green)' }} />
+              <span>Highest Revenue</span>
+            </button>
+            <button
+              className={`segment-btn ${sortBy === 'completion' ? 'active' : ''}`}
+              onClick={() => onSortByChange?.('completion')}
+              title="Sort by Listener Retention"
+            >
+              <span>Retention %</span>
+            </button>
+          </div>
+
+          {/* Genre Filter */}
           <select
             value={selectedGenre}
             onChange={(e) => onGenreChange(e.target.value)}
@@ -45,13 +146,14 @@ export default function TopSongsTable({
             ))}
           </select>
 
+          {/* Search Box */}
           <input
             type="text"
-            placeholder="Search tracks or artists..."
+            placeholder="Search tracks, artists..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             className="form-input"
-            style={{ width: '180px', padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(15, 23, 42, 0.8)' }}
+            style={{ width: '160px', padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(15, 23, 42, 0.8)' }}
           />
         </div>
       </div>
@@ -63,10 +165,10 @@ export default function TopSongsTable({
               <th style={{ width: '36px' }}>#</th>
               <th>Track & Artist</th>
               <th>Genre</th>
-              <th>Plays</th>
-              <th>Skip Rate</th>
+              <th>{selectedPlatform !== 'all' ? `${selectedPlatform.replace('_', ' ')} Plays` : 'Total Streams'}</th>
+              <th>Gross Revenue</th>
               <th>Completion</th>
-              <th>Popularity</th>
+              <th>DSP Platforms</th>
               <th>Length</th>
               <th style={{ textAlign: 'center', width: '50px' }}>Preview</th>
             </tr>
@@ -81,6 +183,8 @@ export default function TopSongsTable({
             ) : (
               songs.map((song) => {
                 const isThisPlaying = currentPlayingSong?.id === song.id && isPlaying;
+                const displayPlays = song.displayPlays ?? song.plays;
+                const displayRevenue = song.displayRevenue ?? song.totalRevenue ?? 0;
 
                 return (
                   <tr
@@ -99,12 +203,32 @@ export default function TopSongsTable({
                       <div className="song-title-cell">
                         <div
                           className="song-cover"
-                          style={{ background: song.coverColor || 'var(--accent-green)' }}
+                          style={{
+                            background: song.coverColor || 'var(--accent-green)',
+                            position: 'relative',
+                            overflow: 'hidden'
+                          }}
+                          onClick={() => onOpenTrack?.(song.id)}
+                          title="Click to view deep track insights"
                         >
-                          <Music size={18} color="#ffffff" style={{ opacity: 0.85 }} />
+                          {song.artworkUrl ? (
+                            <img
+                              src={song.artworkUrl}
+                              alt={song.title}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          ) : (
+                            <Music size={18} color="#ffffff" style={{ opacity: 0.85 }} />
+                          )}
                           <button
                             className="play-overlay-btn"
-                            onClick={() => onPlaySong(song)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onPlaySong(song);
+                            }}
                             title={isThisPlaying ? 'Pause' : 'Play preview'}
                           >
                             {isThisPlaying ? <Pause size={16} /> : <Play size={16} />}
@@ -113,14 +237,35 @@ export default function TopSongsTable({
 
                         <div className="song-meta">
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span className="song-name">{song.title}</span>
+                            <button
+                              className="track-title-btn"
+                              onClick={() => onOpenTrack?.(song.id)}
+                              title="Click for full track telemetry"
+                            >
+                              {song.title}
+                            </button>
                             {song.rank === 1 && (
-                              <span style={{ color: '#fbbf24' }} title="#1 Global">
+                              <span style={{ color: '#fbbf24' }} title="#1 Ranked">
                                 <Sparkles size={13} />
                               </span>
                             )}
                           </div>
-                          <span className="song-artist">{song.artist} • {song.album}</span>
+
+                          <div className="song-sub-links">
+                            <button
+                              className="track-link-btn"
+                              onClick={() => onOpenArtist?.(song.artistId)}
+                            >
+                              {song.artist}
+                            </button>
+                            <span>•</span>
+                            <button
+                              className="track-link-btn"
+                              onClick={() => onOpenAlbum?.(song.albumId)}
+                            >
+                              {song.album}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -133,18 +278,21 @@ export default function TopSongsTable({
                     {/* Plays */}
                     <td>
                       <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {song.plays.toLocaleString()}
+                        {displayPlays.toLocaleString()}
                       </span>
                     </td>
 
-                    {/* Skip Rate */}
+                    {/* Gross Revenue */}
                     <td>
                       <span style={{
                         fontFamily: 'var(--font-mono)',
-                        fontSize: '0.8rem',
-                        color: song.skipRate > 18 ? 'var(--accent-rose)' : 'var(--text-secondary)'
+                        fontWeight: 700,
+                        color: 'var(--accent-green)',
+                        background: 'rgba(16, 185, 129, 0.1)',
+                        padding: '3px 8px',
+                        borderRadius: '6px'
                       }}>
-                        {song.skipRate}%
+                        ${displayRevenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </td>
 
@@ -160,15 +308,19 @@ export default function TopSongsTable({
                       </div>
                     </td>
 
-                    {/* Popularity score meter */}
+                    {/* Platform Micro-Dots */}
                     <td>
-                      <div className="popularity-meter">
-                        <div className="pop-bar">
-                          <div className="pop-fill" style={{ width: `${song.popularity}%` }} />
-                        </div>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                          {song.popularity}
-                        </span>
+                      <div
+                        className="platform-dots-row"
+                        onClick={() => onOpenTrack?.(song.id)}
+                        title="Click to view DSP breakdown"
+                      >
+                        <span className="p-dot spotify" title="Spotify" />
+                        <span className="p-dot apple" title="Apple Music" />
+                        <span className="p-dot tidal" title="Tidal" />
+                        <span className="p-dot youtube" title="YouTube Music" />
+                        <span className="p-dot amazon" title="Amazon Music" />
+                        <ChevronRight size={12} color="var(--text-dim)" />
                       </div>
                     </td>
 
