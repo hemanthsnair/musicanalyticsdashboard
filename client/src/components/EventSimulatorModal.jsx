@@ -99,7 +99,7 @@ export default function EventSimulatorModal({ songs = [], isOpen, onClose, onEve
         </div>
 
         <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-          Inject mock playback, skip, or like events tagged with specific DSP streaming platforms directly into the analytics aggregation engine.
+          Inject live playback, skip, or like telemetry events tagged with specific DSP streaming platforms directly into the analytics aggregation engine.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>

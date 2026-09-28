@@ -3,11 +3,44 @@ import { realMusicService } from "../services/realMusicService.js";
 
 const router = express.Router();
 
-// GET /api/stats/overview - High-level metrics & KPIs
+// GET /api/regions - Available verified global territories
+router.get("/regions", (req, res) => {
+  try {
+    const regions = realMusicService.getRegions();
+    res.json({ success: true, count: regions.length, data: regions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/regions/:countryId/subregions - State / Sub-regions for a specific country
+router.get("/regions/:countryId/subregions", (req, res) => {
+  try {
+    const { countryId } = req.params;
+    const country = realMusicService.getRegions().find(r => r.id === countryId);
+    if (!country) {
+      return res.status(404).json({ success: false, error: "Country not found" });
+    }
+    res.json({
+      success: true,
+      country: country.id,
+      countryName: country.name,
+      countryFlag: country.flag,
+      count: country.subRegions?.length || 0,
+      data: country.subRegions || []
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/stats/overview - High-level metrics & KPIs filtered by DSP, Country & Sub-Region
 router.get("/stats/overview", (req, res) => {
   try {
-    const { platform = "all" } = req.query;
-    const stats = realMusicService.getOverviewStats(platform);
+    const { platform = "all", region = "global", country, subRegion = "all", subregion } = req.query;
+    const activeRegion = country || region;
+    const activeSubRegion = subregion || subRegion;
+    const stats = realMusicService.getOverviewStats(platform, activeRegion, activeSubRegion);
     res.json({ success: true, data: stats });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -19,18 +52,42 @@ router.get("/stats/plays-trend", (req, res) => {
   try {
     const timeframe = req.query.timeframe || "7d";
     const platform = req.query.platform || "all";
-    const trend = realMusicService.getPlaysTrend(timeframe, platform);
-    res.json({ success: true, timeframe, platform, data: trend });
+    const region = req.query.country || req.query.region || "global";
+    const subRegion = req.query.subregion || req.query.subRegion || "all";
+    const trend = realMusicService.getPlaysTrend(timeframe, platform, region, subRegion);
+    res.json({ success: true, timeframe, platform, region, subRegion, data: trend });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// GET /api/songs/top - Top tracks with rankings, plays, revenue, platform, timeframe filters & live search
+// GET /api/songs/top - Top tracks with rankings, plays, revenue, platform, region, subRegion, timeframe filters & live search
 router.get("/songs/top", async (req, res) => {
   try {
-    const { limit = 15, genre = "all", search = "", sortBy = "plays", platform = "all", timeframe = "all-time" } = req.query;
-    const songs = await realMusicService.getTopSongs({ limit, genre, search, sortBy, platform, timeframe });
+    const {
+      limit = 15,
+      genre = "all",
+      search = "",
+      sortBy = "plays",
+      platform = "all",
+      timeframe = "all-time",
+      region = "global",
+      country,
+      subRegion = "all",
+      subregion
+    } = req.query;
+    const activeRegion = country || region;
+    const activeSubRegion = subregion || subRegion;
+    const songs = await realMusicService.getTopSongs({
+      limit,
+      genre,
+      search,
+      sortBy,
+      platform,
+      timeframe,
+      region: activeRegion,
+      subRegion: activeSubRegion
+    });
     res.json({ success: true, count: songs.length, data: songs });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -50,11 +107,18 @@ router.get("/songs/:id", async (req, res) => {
   }
 });
 
-// GET /api/artists/top - Top artists with total streams, revenue, and velocity
+// GET /api/artists/top - Top artists with total streams, revenue, country & subRegion filtering
 router.get("/artists/top", (req, res) => {
   try {
-    const { limit = 10, platform = "all" } = req.query;
-    const artists = realMusicService.getTopArtists({ limit, platform });
+    const { limit = 10, platform = "all", region = "global", country, subRegion = "all", subregion } = req.query;
+    const activeRegion = country || region;
+    const activeSubRegion = subregion || subRegion;
+    const artists = realMusicService.getTopArtists({
+      limit,
+      platform,
+      region: activeRegion,
+      subRegion: activeSubRegion
+    });
     res.json({ success: true, count: artists.length, data: artists });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -121,7 +185,8 @@ router.get("/genres/breakdown", (req, res) => {
 // GET /api/demographics - Listener platform and geo breakdown
 router.get("/demographics", (req, res) => {
   try {
-    const demographics = realMusicService.getDemographics();
+    const region = req.query.country || req.query.region || "global";
+    const demographics = realMusicService.getDemographics(region);
     res.json({ success: true, data: demographics });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

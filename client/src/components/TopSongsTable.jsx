@@ -24,6 +24,12 @@ export default function TopSongsTable({
   onOpenArtist,
   onOpenAlbum,
   selectedPlatform = 'all',
+  onPlatformChange,
+  selectedRegion = 'global',
+  onRegionChange,
+  availableRegions = [],
+  selectedSubRegion = 'all',
+  onSubRegionChange,
   timeframe = 'all-time',
   onTimeframeChange
 }) {
@@ -43,27 +49,59 @@ export default function TopSongsTable({
     '24h': 'Past 24 Hours'
   };
 
+  const currentCountry = availableRegions.find(r => r.id === selectedRegion) || {
+    id: selectedRegion,
+    name: selectedRegion === 'global' ? 'Global' : selectedRegion,
+    flag: selectedRegion === 'global' ? '🌍' : '📍',
+    subRegions: []
+  };
+
+  const currentSubRegions = currentCountry.subRegions || [];
+  const activeSubRegionObj = currentSubRegions.find(sr => sr.id === selectedSubRegion) || {
+    id: 'all',
+    name: 'All States / Nationwide'
+  };
+
+  const platformNames = {
+    all: 'All DSPs',
+    spotify: 'Spotify',
+    apple_music: 'Apple Music',
+    tidal: 'Tidal',
+    youtube_music: 'YouTube Music',
+    amazon_music: 'Amazon Music',
+    deezer: 'Deezer'
+  };
+
+  // Group countries by continent
+  const continents = {};
+  for (const reg of availableRegions) {
+    const cont = reg.continent || 'Other';
+    if (!continents[cont]) continents[cont] = [];
+    continents[cont].push(reg);
+  }
+
   return (
     <div className="glass-panel" style={{ padding: '24px' }}>
       <div className="card-header-bar" style={{ flexWrap: 'wrap', gap: '14px' }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <h2 className="card-title">
               {sortBy === 'revenue' ? (
                 <DollarSign size={20} style={{ color: 'var(--accent-green)' }} />
               ) : (
                 <Flame size={20} style={{ color: 'var(--accent-rose)' }} />
               )}
-              {sortBy === 'revenue' ? 'Top Gross Revenue Generating Tracks' : 'Most Streamed Tracks'}
+              {selectedPlatform !== 'all'
+                ? `${platformNames[selectedPlatform] || selectedPlatform} ${sortBy === 'revenue' ? 'Top Earning Tracks' : 'Most Streamed Tracks'}`
+                : (sortBy === 'revenue' ? 'Top Gross Revenue Generating Tracks' : 'Most Streamed Tracks')
+              }
             </h2>
-            {selectedPlatform !== 'all' && (
-              <span className="badge-pill badge-rank" style={{ textTransform: 'uppercase' }}>
-                {selectedPlatform.replace('_', ' ')}
-              </span>
-            )}
+            <span className="badge-pill badge-rank" style={{ textTransform: 'uppercase' }}>
+              {platformNames[selectedPlatform] || selectedPlatform}
+            </span>
             <span
               style={{
-                fontSize: '0.72rem',
+                fontSize: '0.74rem',
                 color: 'var(--accent-cyan)',
                 background: 'rgba(6, 182, 212, 0.12)',
                 padding: '2px 8px',
@@ -72,20 +110,139 @@ export default function TopSongsTable({
                 letterSpacing: '0.03em'
               }}
             >
+              {currentCountry.flag} {currentCountry.name}
+            </span>
+            {selectedSubRegion !== 'all' && (
+              <span
+                style={{
+                  fontSize: '0.74rem',
+                  color: 'var(--accent-amber)',
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontWeight: 600,
+                  letterSpacing: '0.03em'
+                }}
+              >
+                📍 {activeSubRegionObj.name}
+              </span>
+            )}
+            <span
+              style={{
+                fontSize: '0.72rem',
+                color: 'var(--text-muted)',
+                background: 'rgba(255, 255, 255, 0.06)',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontWeight: 600
+              }}
+            >
               {timeframeLabels[timeframe] || 'All-Time'}
             </span>
           </div>
           <p className="card-subtitle">
             {sortBy === 'revenue'
-              ? 'Ranked by cumulative dollar royalties earned across digital streaming platforms'
-              : selectedPlatform !== 'all'
-                ? `Ranked by verified streaming volume and chart positions on ${selectedPlatform.replace('_', ' ').toUpperCase()}`
-                : 'Ranked by playback volume, listener velocity, and global platform retention'}
+              ? `Ranked by gross dollar royalties earned on ${platformNames[selectedPlatform] || 'all platforms'} in ${selectedSubRegion !== 'all' ? `${activeSubRegionObj.name}, ` : ''}${currentCountry.name}`
+              : `Ranked by verified streaming velocity and chart positions on ${platformNames[selectedPlatform] || 'all DSPs'} across ${selectedSubRegion !== 'all' ? `${activeSubRegionObj.name}, ` : ''}${currentCountry.name}`}
           </p>
         </div>
 
         {/* Sort & Filter Controls */}
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          {/* Country / Territory Dropdown with Continent Groups */}
+          <select
+            value={selectedRegion}
+            onChange={(e) => onRegionChange?.(e.target.value)}
+            className="form-select territory-select"
+            style={{
+              padding: '6px 12px',
+              fontSize: '0.8rem',
+              background: 'rgba(15, 23, 42, 0.85)',
+              border: '1px solid rgba(6, 182, 212, 0.35)',
+              borderRadius: 'var(--radius-full)',
+              color: 'var(--accent-cyan)',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+            title="Select Country or Global Territory"
+          >
+            {Object.keys(continents).length > 0 ? (
+              Object.entries(continents).map(([continent, list]) => (
+                <optgroup key={continent} label={continent}>
+                  {list.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.flag} {c.name} {c.id !== 'global' ? `(${c.sharePercent}%)` : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              ))
+            ) : (
+              <>
+                <option value="global">🌍 Global (Worldwide)</option>
+                <option value="US">🇺🇸 United States</option>
+                <option value="GB">🇬🇧 United Kingdom</option>
+                <option value="DE">🇩🇪 Germany</option>
+                <option value="CA">🇨🇦 Canada</option>
+                <option value="JP">🇯🇵 Japan</option>
+                <option value="BR">🇧🇷 Brazil</option>
+                <option value="AU">🇦🇺 Australia</option>
+              </>
+            )}
+          </select>
+
+          {/* State / Sub-Region Dropdown (appears for country with sub-regions) */}
+          {currentSubRegions.length > 1 && (
+            <select
+              value={selectedSubRegion}
+              onChange={(e) => onSubRegionChange?.(e.target.value)}
+              className="form-select subregion-select"
+              style={{
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                background: 'rgba(15, 23, 42, 0.85)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: 'var(--radius-full)',
+                color: 'var(--accent-amber)',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+              title="Filter by State / Sub-Region / Metro Area"
+            >
+              {currentSubRegions.map((sr) => (
+                <option key={sr.id} value={sr.id}>
+                  {sr.id === 'all' ? `📍 ${sr.name}` : `${sr.name} (${sr.sharePercent}%)`}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* DSP Platform Selector */}
+          <select
+            value={selectedPlatform}
+            onChange={(e) => onPlatformChange?.(e.target.value)}
+            className="form-select platform-select"
+            style={{
+              padding: '6px 12px',
+              fontSize: '0.8rem',
+              background: 'rgba(15, 23, 42, 0.85)',
+              border: '1px solid rgba(16, 185, 129, 0.35)',
+              borderRadius: 'var(--radius-full)',
+              color: 'var(--accent-green)',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+            title="Filter by Streaming Application (DSP)"
+          >
+            <option value="all">🌐 All DSPs Combined</option>
+            <option value="spotify">🟢 Spotify ($0.0038/play)</option>
+            <option value="apple_music">🔴 Apple Music ($0.0080/play)</option>
+            <option value="tidal">🔵 Tidal ($0.0125/play - Master)</option>
+            <option value="youtube_music">🔴 YouTube Music ($0.0022/play)</option>
+            <option value="amazon_music">🟠 Amazon Music ($0.0042/play)</option>
+            <option value="deezer">🟣 Deezer ($0.0055/play)</option>
+          </select>
+
           {/* Timeframe Selector Pills */}
           <div className="segmented-control" title="Select time period for rankings">
             {[
@@ -139,7 +296,7 @@ export default function TopSongsTable({
             className="form-select"
             style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(15, 23, 42, 0.8)' }}
           >
-            {genres.map(g => (
+            {genres.map((g) => (
               <option key={g} value={g}>
                 {g === 'all' ? 'All Genres' : g}
               </option>
@@ -162,11 +319,25 @@ export default function TopSongsTable({
         <table className="songs-table">
           <thead>
             <tr>
-              <th style={{ width: '36px' }}>#</th>
+              <th style={{ width: '40px', textAlign: 'center' }}>#</th>
               <th>Track & Artist</th>
               <th>Genre</th>
-              <th>{selectedPlatform !== 'all' ? `${selectedPlatform.replace('_', ' ')} Plays` : 'Total Streams'}</th>
-              <th>Gross Revenue</th>
+              <th>
+                {selectedPlatform !== 'all'
+                  ? `${platformNames[selectedPlatform] || selectedPlatform} Streams`
+                  : 'Total Streams'
+                }
+                {selectedSubRegion !== 'all'
+                  ? ` (${selectedSubRegion}, ${selectedRegion})`
+                  : (selectedRegion !== 'global' ? ` (${selectedRegion})` : '')
+                }
+              </th>
+              <th>
+                {selectedPlatform !== 'all'
+                  ? `${platformNames[selectedPlatform] || selectedPlatform} Royalty`
+                  : 'Gross Revenue'
+                }
+              </th>
               <th>Completion</th>
               <th>DSP Platforms</th>
               <th>Length</th>
@@ -193,9 +364,23 @@ export default function TopSongsTable({
                   >
                     {/* Rank */}
                     <td>
-                      <span className={`song-rank ${song.rank <= 3 ? 'top-3' : ''}`}>
-                        {song.rank}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                        <span className={`song-rank ${song.rank <= 3 ? 'top-3' : ''}`}>
+                          {song.rank}
+                        </span>
+                        {selectedRegion !== 'global' && (
+                          <span
+                            style={{
+                              fontSize: '0.62rem',
+                              color: selectedSubRegion !== 'all' ? 'var(--accent-amber)' : 'var(--text-muted)',
+                              fontWeight: selectedSubRegion !== 'all' ? 600 : 400
+                            }}
+                            title={`Territory rank in ${selectedSubRegion !== 'all' ? `${song.subRegionName || selectedSubRegion}, ` : ''}${song.regionName || selectedRegion}`}
+                          >
+                            {song.regionFlag || '📍'}{selectedSubRegion !== 'all' ? ` ${selectedSubRegion}` : ''}
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Track info with cover art */}

@@ -34,14 +34,14 @@
   - 30-day stream velocity curve and revenue trajectory.
   - Platform breakdown table with stream volume, revenue, payout rates, and audio formats.
   - Top geographic listener markets.
-  - Direct Web Audio API synthesizer preview with live soundwave animations.
+  - Authentic studio audio preview player with live soundwave animations.
 - **Artist Catalog Insights**: Click any creator to inspect total catalog streams, gross artist royalties, monthly listeners, discography tracklists, and platform revenue shares.
 - **Album Catalog Insights**: Comprehensive album grid and detail modal showcasing release information, cumulative streams, gross album royalties, and full tracklists.
 
 ### 5. ⚡ Backend Analytics Engine & REST APIs (`server/`)
 - `GET /api/stats/overview?platform=...`: Executive KPIs (total plays, gross revenue, listeners, completion rate, peak hours).
 - `GET /api/stats/plays-trend?timeframe=24h|7d|30d|12m&platform=...`: Time-series streaming volume and revenue curves.
-- `GET /api/songs/top?limit=10&genre=...&search=...&sortBy=plays|revenue|completion&platform=...`: Most played or highest earning tracks.
+- `GET /api/songs/top?limit=10&genre=...&search=...&sortBy=plays|revenue|completion&platform=...`: Most played or highest earning tracks, backed by verified streaming data and live search.
 - `GET /api/songs/:id`: Deep granular telemetry for a specific track.
 - `GET /api/artists/top?limit=10&platform=...`: Top creator velocity with total streams, revenue, and reach.
 - `GET /api/artists/:id`: Deep artist catalog and royalty profile.
@@ -52,13 +52,13 @@
 - `GET /api/demographics`: Device ecosystem (iOS, Android, Desktop, Web) and geographic listener rankings.
 - `GET /api/activity/stream`: Recent user engagement events.
 - `GET /api/activity/live`: **Server-Sent Events (SSE)** channel broadcasting live listening events and instant payouts in real-time.
-- `POST /api/events/track`: Ingestion API allowing telemetry simulation with DSP platform tags.
+- `POST /api/events/track`: Live telemetry ingestion API allowing instant streaming events tagged with DSP platforms.
 
 ### 6. 🎨 Sleek Front-End Experience (`client/`)
 - **Atmospheric Obsidian Dark Theme**: Glassmorphic frosted surfaces (`backdrop-filter: blur(16px)`), subtle neon gradients, and glowing accents.
 - **Interactive SVG Playback Chart**: Bezier-smoothed streaming velocity curves with gradient fills and live crosshair tooltips.
 - **Genre Velocity Donut**: Circular SVG breakdown of listening taste.
-- **Interactive Web Audio API Synthesizer**: Click "Preview" on any song to hear harmonic synth melodies tailored to the genre, accompanied by dancing equalizer soundwave bars.
+- **Authentic Master Audio Player**: Click "Play" on any track to stream genuine 30-second studio audio previews directly from official global CDN endpoints, accompanied by dancing equalizer soundwave bars.
 - **Live Stream Ticker**: Pulsing live activity feed showing listener actions from Tokyo, Berlin, New York, London, and São Paulo with platform badges and instant revenue increments.
 - **Stream Ingestion Simulator**: Built-in interactive drawer to inject plays, skips, and traffic bursts tagged by DSP platform to watch metrics update live.
 

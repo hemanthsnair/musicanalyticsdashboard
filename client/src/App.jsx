@@ -37,6 +37,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('overview');
   const [timeframe, setTimeframe] = useState('7d');
   const [selectedPlatform, setSelectedPlatform] = useState('all');
+  const [selectedRegion, setSelectedRegion] = useState('global');
+  const [selectedSubRegion, setSelectedSubRegion] = useState('all');
+  const [availableRegions, setAvailableRegions] = useState([]);
   const [sortBy, setSortBy] = useState('plays'); // 'plays' | 'revenue' | 'completion'
 
   // Data States
@@ -70,10 +73,20 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  // Fetch initial overview
-  const fetchOverview = async (platform = selectedPlatform) => {
+  const fetchRegions = async () => {
     try {
-      const res = await fetch(`/api/stats/overview?platform=${platform}`);
+      const res = await fetch('/api/regions');
+      const data = await res.json();
+      if (data.success) setAvailableRegions(data.data);
+    } catch (err) {
+      console.error('Error fetching regions', err);
+    }
+  };
+
+  // Fetch overview with country and sub-region filters
+  const fetchOverview = async (platform = selectedPlatform, region = selectedRegion, subRegion = selectedSubRegion) => {
+    try {
+      const res = await fetch(`/api/stats/overview?platform=${platform}&region=${region}&subRegion=${subRegion}`);
       const data = await res.json();
       if (data.success) setOverview(data.data);
     } catch (err) {
@@ -81,9 +94,9 @@ export default function App() {
     }
   };
 
-  const fetchTrend = async (tf = timeframe, platform = selectedPlatform) => {
+  const fetchTrend = async (tf = timeframe, platform = selectedPlatform, region = selectedRegion, subRegion = selectedSubRegion) => {
     try {
-      const res = await fetch(`/api/stats/plays-trend?timeframe=${tf}&platform=${platform}`);
+      const res = await fetch(`/api/stats/plays-trend?timeframe=${tf}&platform=${platform}&region=${region}&subRegion=${subRegion}`);
       const data = await res.json();
       if (data.success) setTrendData(data.data);
     } catch (err) {
@@ -95,10 +108,12 @@ export default function App() {
     sb = sortBy,
     platform = selectedPlatform,
     search = searchQuery,
-    tf = songTimeframe
+    tf = songTimeframe,
+    region = selectedRegion,
+    subRegion = selectedSubRegion
   ) => {
     try {
-      const url = `/api/songs/top?limit=25&sortBy=${sb}&platform=${platform}&search=${encodeURIComponent(search || '')}&timeframe=${tf}`;
+      const url = `/api/songs/top?limit=25&sortBy=${sb}&platform=${platform}&search=${encodeURIComponent(search || '')}&timeframe=${tf}&region=${region}&subRegion=${subRegion}`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.success) {
@@ -112,9 +127,9 @@ export default function App() {
     }
   };
 
-  const fetchArtists = async (platform = selectedPlatform) => {
+  const fetchArtists = async (platform = selectedPlatform, region = selectedRegion, subRegion = selectedSubRegion) => {
     try {
-      const res = await fetch(`/api/artists/top?limit=12&platform=${platform}`);
+      const res = await fetch(`/api/artists/top?limit=12&platform=${platform}&region=${region}&subRegion=${subRegion}`);
       const data = await res.json();
       if (data.success) setArtists(data.data);
     } catch (err) {
@@ -132,9 +147,9 @@ export default function App() {
     }
   };
 
-  const fetchDemographics = async () => {
+  const fetchDemographics = async (region = selectedRegion) => {
     try {
-      const res = await fetch('/api/demographics');
+      const res = await fetch(`/api/demographics?region=${region}`);
       const data = await res.json();
       if (data.success) setDemographics(data.data);
     } catch (err) {
@@ -154,19 +169,20 @@ export default function App() {
 
   // Initial Load
   useEffect(() => {
-    fetchOverview();
-    fetchTrend('7d', selectedPlatform);
-    fetchSongs(sortBy, selectedPlatform, '', 'all-time');
-    fetchArtists(selectedPlatform);
+    fetchRegions();
+    fetchOverview(selectedPlatform, selectedRegion, selectedSubRegion);
+    fetchTrend('7d', selectedPlatform, selectedRegion, selectedSubRegion);
+    fetchSongs(sortBy, selectedPlatform, '', 'all-time', selectedRegion, selectedSubRegion);
+    fetchArtists(selectedPlatform, selectedRegion, selectedSubRegion);
     fetchGenres();
-    fetchDemographics();
+    fetchDemographics(selectedRegion);
     fetchActivities();
   }, []);
 
   // Debounced search query trigger
   useEffect(() => {
     const handler = setTimeout(() => {
-      fetchSongs(sortBy, selectedPlatform, searchQuery, songTimeframe);
+      fetchSongs(sortBy, selectedPlatform, searchQuery, songTimeframe, selectedRegion, selectedSubRegion);
     }, 280);
     return () => clearTimeout(handler);
   }, [searchQuery]);
@@ -174,10 +190,10 @@ export default function App() {
   // When platform changes, re-fetch all relevant data
   const handlePlatformChange = (newPlatform) => {
     setSelectedPlatform(newPlatform);
-    fetchOverview(newPlatform);
-    fetchTrend(timeframe, newPlatform);
-    fetchSongs(sortBy, newPlatform, searchQuery, songTimeframe);
-    fetchArtists(newPlatform);
+    fetchOverview(newPlatform, selectedRegion, selectedSubRegion);
+    fetchTrend(timeframe, newPlatform, selectedRegion, selectedSubRegion);
+    fetchSongs(sortBy, newPlatform, searchQuery, songTimeframe, selectedRegion, selectedSubRegion);
+    fetchArtists(newPlatform, selectedRegion, selectedSubRegion);
     triggerToast(
       newPlatform === 'all'
         ? 'Showing verified aggregated data across all DSP platforms'
@@ -185,20 +201,45 @@ export default function App() {
     );
   };
 
+  // When country/region changes, reset sub-region and re-fetch
+  const handleRegionChange = (newRegion) => {
+    setSelectedRegion(newRegion);
+    setSelectedSubRegion('all');
+    fetchOverview(selectedPlatform, newRegion, 'all');
+    fetchTrend(timeframe, selectedPlatform, newRegion, 'all');
+    fetchSongs(sortBy, selectedPlatform, searchQuery, songTimeframe, newRegion, 'all');
+    fetchArtists(selectedPlatform, newRegion, 'all');
+    fetchDemographics(newRegion);
+    const country = availableRegions.find(r => r.id === newRegion);
+    triggerToast(`Territory set to ${country?.flag || '📍'} ${country?.name || newRegion}`);
+  };
+
+  // When state/sub-region changes, re-fetch data for that specific state
+  const handleSubRegionChange = (newSubRegion) => {
+    setSelectedSubRegion(newSubRegion);
+    fetchOverview(selectedPlatform, selectedRegion, newSubRegion);
+    fetchTrend(timeframe, selectedPlatform, selectedRegion, newSubRegion);
+    fetchSongs(sortBy, selectedPlatform, searchQuery, songTimeframe, selectedRegion, newSubRegion);
+    fetchArtists(selectedPlatform, selectedRegion, newSubRegion);
+    const country = availableRegions.find(r => r.id === selectedRegion);
+    const sub = country?.subRegions?.find(s => s.id === newSubRegion);
+    triggerToast(`Filtered to state/sub-region: ${sub?.name || newSubRegion}`);
+  };
+
   const handleSortByChange = (newSortBy) => {
     setSortBy(newSortBy);
-    fetchSongs(newSortBy, selectedPlatform, searchQuery, songTimeframe);
+    fetchSongs(newSortBy, selectedPlatform, searchQuery, songTimeframe, selectedRegion, selectedSubRegion);
   };
 
   const handleSongTimeframeChange = (newTf) => {
     setSongTimeframe(newTf);
-    fetchSongs(sortBy, selectedPlatform, searchQuery, newTf);
+    fetchSongs(sortBy, selectedPlatform, searchQuery, newTf, selectedRegion, selectedSubRegion);
     triggerToast(`Time period updated to ${newTf.toUpperCase()} rankings`);
   };
 
   const handleTimeframeChange = (newTf) => {
     setTimeframe(newTf);
-    fetchTrend(newTf, selectedPlatform);
+    fetchTrend(newTf, selectedPlatform, selectedRegion, selectedSubRegion);
   };
 
   // Server-Sent Events (SSE) Live Feed Subscription
@@ -308,6 +349,11 @@ export default function App() {
     return s.genre.toLowerCase().includes(selectedGenre.toLowerCase());
   });
 
+  // Derive active country and sub-regions
+  const activeCountry = availableRegions.find((r) => r.id === selectedRegion);
+  const activeSubRegions = activeCountry?.subRegions || [];
+  const activeSubRegionObj = activeSubRegions.find((s) => s.id === selectedSubRegion);
+
   return (
     <div className="app-container">
       {/* Toast Notification */}
@@ -403,30 +449,143 @@ export default function App() {
 
       {/* Main Wrapper */}
       <div className="main-wrapper">
-        {/* Top Header with Global Platform Selector */}
-        <header className="top-header">
-          {/* Global Platform Selector Bar */}
-          <div className="platform-filter-bar">
-            <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
-              Platform Lens:
-            </span>
-            {[
-              { id: 'all', label: 'All DSPs', color: 'var(--accent-green)' },
-              { id: 'spotify', label: 'Spotify', color: '#1db954' },
-              { id: 'apple_music', label: 'Apple Music', color: '#fa243c' },
-              { id: 'tidal', label: 'Tidal', color: '#00ffff' },
-              { id: 'youtube_music', label: 'YouTube Music', color: '#ff0000' },
-              { id: 'amazon_music', label: 'Amazon Music', color: '#ff9900' }
-            ].map((p) => (
-              <button
-                key={p.id}
-                className={`platform-pill ${selectedPlatform === p.id ? 'active' : ''}`}
-                onClick={() => handlePlatformChange(p.id)}
-              >
-                <span className="pill-dot" style={{ background: p.color }} />
-                <span>{p.label}</span>
-              </button>
-            ))}
+        {/* Top Header with Global Platform & Region Selector */}
+        <header className="top-header" style={{ height: 'auto', minHeight: '72px', padding: '12px 32px', gap: '16px', flexWrap: 'wrap' }}>
+          {/* Global Platform & Region Selector Bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap', flex: 1 }}>
+            <div className="platform-filter-bar">
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
+                DSP Lens:
+              </span>
+              {[
+                { id: 'all', label: 'All DSPs', color: 'var(--accent-green)' },
+                { id: 'spotify', label: 'Spotify', color: '#1db954' },
+                { id: 'apple_music', label: 'Apple Music', color: '#fa243c' },
+                { id: 'tidal', label: 'Tidal', color: '#00ffff' },
+                { id: 'youtube_music', label: 'YouTube Music', color: '#ff0000' },
+                { id: 'amazon_music', label: 'Amazon Music', color: '#ff9900' }
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  className={`platform-pill ${selectedPlatform === p.id ? 'active' : ''}`}
+                  onClick={() => handlePlatformChange(p.id)}
+                >
+                  <span className="pill-dot" style={{ background: p.color }} />
+                  <span>{p.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="platform-filter-bar territory-bar" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
+                  Country:
+                </span>
+                <select
+                  value={selectedRegion}
+                  onChange={(e) => handleRegionChange(e.target.value)}
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.85)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '8px',
+                    padding: '4px 10px',
+                    fontSize: '0.78rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                  title="Select from all available countries"
+                >
+                  {availableRegions.map((r) => (
+                    <option key={r.id} value={r.id} style={{ background: '#0f172a', color: '#f8fafc' }}>
+                      {r.flag} {r.name} ({r.id.toUpperCase()})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {activeSubRegions.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
+                    State / Sub-Region:
+                  </span>
+                  <select
+                    value={selectedSubRegion}
+                    onChange={(e) => handleSubRegionChange(e.target.value)}
+                    style={{
+                      background: selectedSubRegion !== 'all' ? 'rgba(99, 102, 241, 0.25)' : 'rgba(15, 23, 42, 0.85)',
+                      color: selectedSubRegion !== 'all' ? '#a5b4fc' : 'var(--text-primary)',
+                      border: selectedSubRegion !== 'all' ? '1px solid #6366f1' : '1px solid rgba(255, 255, 255, 0.12)',
+                      borderRadius: '8px',
+                      padding: '4px 10px',
+                      fontSize: '0.78rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      outline: 'none'
+                    }}
+                    title="Select state, province, or sub-region"
+                  >
+                    <option value="all" style={{ background: '#0f172a', color: '#f8fafc' }}>
+                      🗺️ All States / Sub-Regions
+                    </option>
+                    {activeSubRegions.map((sub) => (
+                      <option key={sub.id} value={sub.id} style={{ background: '#0f172a', color: '#f8fafc' }}>
+                        📍 {sub.name} ({sub.sharePercent}% vol • {sub.metro})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                {[
+                  { id: 'global', label: 'Global', flag: '🌍' },
+                  { id: 'US', label: 'USA', flag: '🇺🇸' },
+                  { id: 'GB', label: 'UK', flag: '🇬🇧' },
+                  { id: 'IN', label: 'India', flag: '🇮🇳' },
+                  { id: 'CA', label: 'Canada', flag: '🇨🇦' },
+                  { id: 'DE', label: 'Germany', flag: '🇩🇪' },
+                  { id: 'JP', label: 'Japan', flag: '🇯🇵' },
+                  { id: 'BR', label: 'Brazil', flag: '🇧🇷' }
+                ].map((r) => (
+                  <button
+                    key={r.id}
+                    className={`platform-pill ${selectedRegion === r.id ? 'active' : ''}`}
+                    onClick={() => handleRegionChange(r.id)}
+                    title={`View data for ${r.label}`}
+                    style={{ padding: '3px 8px', fontSize: '0.74rem' }}
+                  >
+                    <span style={{ fontSize: '0.8rem' }}>{r.flag}</span>
+                    <span>{r.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {selectedSubRegion !== 'all' && activeSubRegionObj && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '3px 10px',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.4)',
+                  borderRadius: '12px',
+                  fontSize: '0.72rem',
+                  color: '#a5b4fc',
+                  fontWeight: 600
+                }}>
+                  <span>📍 {activeSubRegionObj.name} ({activeCountry?.flag}) • {activeSubRegionObj.sharePercent}% Nat. Share</span>
+                  <button
+                    onClick={() => handleSubRegionChange('all')}
+                    style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                    title="Clear sub-region filter"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="header-actions">
@@ -468,7 +627,13 @@ export default function App() {
               title="Total Stream Plays"
               value={overview?.totalPlays ? overview.totalPlays.toLocaleString() : '10,544,300'}
               change={overview?.totalPlaysChange ?? 14.8}
-              subtext={selectedPlatform !== 'all' ? `Plays on ${selectedPlatform.replace('_', ' ').toUpperCase()}` : "vs previous 30 days"}
+              subtext={
+                selectedSubRegion !== 'all'
+                  ? `Streams in ${activeSubRegionObj?.name || selectedSubRegion}`
+                  : (selectedPlatform !== 'all'
+                    ? `Plays on ${selectedPlatform.replace('_', ' ').toUpperCase()}`
+                    : (selectedRegion !== 'global' ? `Streams in ${overview?.regionName || selectedRegion}` : "vs previous 30 days"))
+              }
               icon={Headphones}
               color="emerald"
             />
@@ -476,7 +641,11 @@ export default function App() {
               title="Gross Royalty Revenue"
               value={overview?.totalRevenue ? `$${overview.totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '$48,290'}
               change={overview?.totalRevenueChange ?? 16.4}
-              subtext={overview?.avgRevenuePerThousand ? `$${overview.avgRevenuePerThousand} / 1k streams` : "Gross catalog royalties"}
+              subtext={
+                selectedSubRegion !== 'all'
+                  ? `${activeSubRegionObj?.name || selectedSubRegion} royalties`
+                  : (overview?.avgRevenuePerThousand ? `$${overview.avgRevenuePerThousand} / 1k streams` : "Gross catalog royalties")
+              }
               icon={DollarSign}
               color="emerald"
             />
@@ -484,7 +653,11 @@ export default function App() {
               title="Unique Listeners"
               value={overview?.totalListeners ? `${(overview.totalListeners / 1000000).toFixed(2)}M` : '3.84M'}
               change={overview?.totalListenersChange ?? 9.3}
-              subtext="Global reach"
+              subtext={
+                selectedSubRegion !== 'all'
+                  ? `Reach in ${activeSubRegionObj?.name || selectedSubRegion}`
+                  : (selectedRegion !== 'global' ? `Reach in ${overview?.regionName || selectedRegion}` : "Global reach")
+              }
               icon={Users}
               color="cyan"
             />
@@ -536,6 +709,12 @@ export default function App() {
                   onOpenArtist={setSelectedArtistId}
                   onOpenAlbum={setSelectedAlbumId}
                   selectedPlatform={selectedPlatform}
+                  onPlatformChange={handlePlatformChange}
+                  selectedRegion={selectedRegion}
+                  onRegionChange={handleRegionChange}
+                  availableRegions={availableRegions}
+                  selectedSubRegion={selectedSubRegion}
+                  onSubRegionChange={handleSubRegionChange}
                   timeframe={songTimeframe}
                   onTimeframeChange={handleSongTimeframeChange}
                 />
@@ -547,7 +726,13 @@ export default function App() {
               </div>
 
               {/* Demographics Preview */}
-              <DemographicsPanel demographics={demographics} />
+              <DemographicsPanel
+                demographics={demographics}
+                selectedRegion={selectedRegion}
+                selectedSubRegion={selectedSubRegion}
+                onSelectCountry={handleRegionChange}
+                onSelectSubRegion={handleSubRegionChange}
+              />
             </>
           )}
 
@@ -568,6 +753,12 @@ export default function App() {
               onOpenArtist={setSelectedArtistId}
               onOpenAlbum={setSelectedAlbumId}
               selectedPlatform={selectedPlatform}
+              onPlatformChange={handlePlatformChange}
+              selectedRegion={selectedRegion}
+              onRegionChange={handleRegionChange}
+              availableRegions={availableRegions}
+              selectedSubRegion={selectedSubRegion}
+              onSubRegionChange={handleSubRegionChange}
               timeframe={songTimeframe}
               onTimeframeChange={handleSongTimeframeChange}
             />
@@ -599,7 +790,13 @@ export default function App() {
 
           {/* TAB: Demographics */}
           {activeTab === 'demographics' && (
-            <DemographicsPanel demographics={demographics} />
+            <DemographicsPanel
+              demographics={demographics}
+              selectedRegion={selectedRegion}
+              selectedSubRegion={selectedSubRegion}
+              onSelectCountry={handleRegionChange}
+              onSelectSubRegion={handleSubRegionChange}
+            />
           )}
 
           {/* TAB: Live Telemetry */}
